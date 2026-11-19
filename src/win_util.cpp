@@ -13,11 +13,13 @@
 #include <algorithm>
 #include <QDir>
 
-namespace nsm::win {
+namespace nsf::win {
 namespace {
 
 constexpr wchar_t kRunKey[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-constexpr wchar_t kValueName[] = L"NetSpeedMon";
+constexpr wchar_t kValueName[] = L"NetSpeedFlux";
+// 更名前的启动项名字，安装/启用时顺手清掉，避免留下指向旧 exe 的死项
+constexpr wchar_t kLegacyValueName[] = L"NetSpeedMon";
 
 QString readRegistryString(HKEY root, const wchar_t* subKey, const wchar_t* value) {
     wchar_t buffer[2048] = {};
@@ -167,6 +169,9 @@ bool setAutoStart(bool enable, QString* error) {
         if (status == ERROR_FILE_NOT_FOUND) status = ERROR_SUCCESS;
     }
 
+    // 清理更名前遗留的启动项（只在 key 还开着的时候尝试一次）
+    RegDeleteValueW(key, kLegacyValueName);
+
     RegCloseKey(key);
 
     if (status != ERROR_SUCCESS) {
@@ -176,4 +181,4 @@ bool setAutoStart(bool enable, QString* error) {
     return true;
 }
 
-}  // namespace nsm::win
+}  // namespace nsf::win

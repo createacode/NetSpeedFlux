@@ -1,5 +1,8 @@
 # NetSpeedMon 代码审查与整改方案
 
+
+> **更名说明**：本项目自 v1.3.0 起由 **NetSpeedMon** 更名为 **NetSpeedFlux**。
+> 本文档保留原名称与原始结论作为历史记录；文中 `NetSpeedMon.exe` / `dist/NetSpeedMon` 等指更名前的产物。
 > 审查对象：`NetSpeedMon/`（commit `241c0c7`，master）
 > 代码规模：`main.cpp` 1431 行 / 6 个类，`CMakeLists.txt` 57 行，`dist/` 二进制 82.3 MB
 > 审查日期：2026-11-19
@@ -1272,3 +1275,121 @@ void Overlay::ensureShown() {
 - 已知取舍：加粗会牺牲一点秀气感；用户仍可在设置里取消勾选"加粗"，字号 8–48 可调。
 
 验证：MSVC 零警告、ctest 3/3、exe 资源字段逐项核对、实机截图确认渲染。
+
+### 7.12 关掉托盘图标后关闭主窗口，悬浮窗也跟着消失
+
+**现象**（可复现）：设置里取消"显示托盘图标"→ 保存 → 关闭主窗口 → **悬浮窗一起消失**。
+
+**根因**：`SettingsWindow::closeEvent()` 的判定只看托盘：
+
+```cpp
+const bool trayUsable = m_cfg->showTray && QSystemTrayIcon::isSystemTrayAvailable();
+if (trayUsable) { hide(); event->ignore(); return; }
+event->accept();  // → quitRequested() → App::quit() → 删除悬浮窗 + 退出
+```
+
+托盘关掉后 `trayUsable` 为假，直接走退出分支，把整个程序（含悬浮窗）关掉了。
+这是 7.1 里"没有托盘就没有入口，关闭窗口直接退出"的过度保守实现 —— 它忽略了**悬浮窗本身也是可见入口**。
+
+**修复**：只有"托盘不可用 **且** 悬浮窗也关掉"时才退出：
+
+```cpp
+if (trayUsable || m_cfg->showOverlay) { hide(); event->ignore(); return; }
+```
+
+另外在保存成功时给出提示：`已保存：关闭本窗口后程序仍在后台运行（悬浮窗可见），双击程序可再次打开此界面`。
+
+**找回设置界面的路径**：双击 `NetSpeedMon.exe` → 单实例机制广播 → `App::activate()` → `showMainWindow()`。
+退出程序同理：唤出窗口后点"退出"。
+
+**验证**：
+
+| 场景 | 结果 |
+|---|---|
+| 托盘关 + 悬浮窗开 → 关闭主窗口 | 进程存活 ✅、悬浮窗可见 ✅、像素 1103（与关闭前一致） |
+| 托盘关 + 悬浮窗关 → 关闭主窗口 | 进程退出 ✅（不留无入口的僵尸进程） |
+| 关窗后再次双击 exe | 第二个进程 2s 内退出（单实例）✅、已有实例的设置窗口被唤出 ✅、存活实例 1 个 ✅ |
+| ctest | 3/3 ✅ |
+
+### 7.13 托盘关闭后，双击悬浮窗打开设置
+
+**需求**：关掉托盘图标、只剩悬浮窗时，双击悬浮窗应打开主界面；托盘图标可用时，双击悬浮窗无动作（保持点击穿透）。
+
+**三个技术难点**：
+
+1. **分层窗口按像素 alpha 做命中测试**：`WS_EX_LAYERED` 窗口内部 alpha=0 的区域，鼠标消息**直接穿透到下层窗口**，
+   连 `WM_NCHITTEST` 都收不到。所以只把 `WA_TransparentForMouseEvents` 关掉是不够的。
+2. `nativeEvent` 里对 `WM_NCHITTEST` 返回 `HTTRANSPARENT` 是第二道穿透，需要按模式放行。
+3. 不依赖窗口类的 `CS_DBLCLKS` 判断双击，避免不同系统版本行为不一致。
+
+**实现**：
+
+- `Overlay::setInteractive(bool)`：由 `App::applyConfig()` 用 `!m_cfg.showTray` 驱动，切换
+  `WA_TransparentForMouseEvents`、鼠标指针（手型）、tooltip，并写日志说明当前模式。
+- `nativeEvent`：交互模式下 `WM_NCHITTEST` 直接 `return false` 交给 Qt，非交互模式仍返回 `HTTRANSPARENT`。
+- `paintFrame()`：交互模式下先用 **alpha=1**（0.4%，肉眼不可见）的同色圆角矩形铺底，
+  让整块区域变成可命中；非交互模式不铺，保持真正的全透明。
+- `mousePressEvent()`：自实现双击判定（两次按下间隔 <400ms、位移 ≤6px），命中则 `emit activationRequested()`
+  → `App::activate()` → `showMainWindow()`。
+
+**验证**（真实鼠标事件注入）：
+
+| 模式 | 双击悬浮窗结果 |
+|---|---|
+| 托盘关闭（`sti=false`） | 设置窗口可见 = **True** ✅ |
+| 托盘开启（`sti=true`） | 设置窗口可见 = **False**（保持穿透、无动作）✅ |
+| 切换模式时 | 控制台日志各一条：`悬浮窗切换为可点击` / `悬浮窗保持点击穿透` ✅ |
+
+#### 7.13 修订：改为"全局鼠标钩子"，让单击真正无感
+
+初版实现是"交互模式下铺 alpha=1 的隐形底让窗口可命中"，问题：**单击会被窗口吃掉**（不再穿透到任务栏），
+与"单击无感"冲突。窗口一旦接收事件，就没法把这一次点击再交还给下层。
+
+改为：
+
+- 窗口**始终**保持点击穿透（`WA_TransparentForMouseEvents` + `WM_NCHITTEST → HTTRANSPARENT`），
+  不再铺任何隐形底，`paintEvent` 恢复为真正的内部全透明。
+- 托盘关闭时安装 **`WH_MOUSE_LL` 低级鼠标钩子**：回调里只做"点是否落在悬浮窗矩形内 + 与上次按下的时间/
+  位移是否构成双击"，**永远 `CallNextHookEx` 不拦截**，所以单击照旧落到任务栏。
+- 双击命中后通过 `QMetaObject::invokeMethod(..., Qt::QueuedConnection)` 排队发信号，
+  不在钩子回调里直接弹窗口。
+- 双击判定用系统参数 `GetDoubleClickTime()` / `SM_CXDOUBLECLK`，与资源管理器行为一致。
+- 托盘恢复后立刻 `UnhookWindowsHookEx`，钩子不会常驻。
+
+**验证**（真实鼠标注入 + `WindowFromPoint`）：
+
+| 模式 | 悬浮窗中心点下方窗口 | 单击后设置窗口 | 双击后设置窗口 |
+|---|---|---|---|
+| 托盘关闭 | `Shell_TrayWnd`（穿透）✅ | 不可见 ✅ | **可见** ✅ |
+| 托盘开启 | `Shell_TrayWnd`（穿透）✅ | 不可见 ✅ | 不可见 ✅ |
+
+日志：`托盘已关闭：双击悬浮窗可打开设置（单击仍然穿透）` / `托盘可用：悬浮窗保持点击穿透，双击无动作`。
+
+### 7.14 更名：NetSpeedMon → NetSpeedFlux（v1.3.0）
+
+**范围**（用户可见的部分）：
+
+| 位置 | 变化 |
+|---|---|
+| 可执行文件 | `NetSpeedMon.exe` → `NetSpeedFlux.exe` |
+| 窗口标题 | `NetSpeedFlux 网速监测` / `NetSpeedFlux Overlay` |
+| 关于对话框 / 日志 | `NetSpeedFlux 1.3.0` |
+| exe 版本资源 | `ProductName` / `InternalName` / `OriginalFilename` = NetSpeedFlux，`FileDescription` 同步 |
+| 托盘 tooltip / 单实例互斥体 / 广播消息 | 统一改名（旧实例名不再冲突） |
+| 注册表自启项 | 值名 `NetSpeedFlux`；**同时删除更名前的 `NetSpeedMon` 值** |
+| 用户配置目录 | `%LOCALAPPDATA%\XAF\NetSpeedFlux\`（便携模式路径不变，仍是 exe 旁的 `config/`） |
+
+**兼容处理**（不丢用户数据）：
+
+1. **自启路径**：更名后 exe 路径变了，启动时若发现"配置要求自启但注册表项指向旧路径"，自动按当前位置重写一次
+   （日志：`开机自启指向旧路径，已按当前程序位置自动更新`）。
+2. **旧自启值清理**：`setAutoStart()` 里顺带 `RegDeleteValueW("NetSpeedMon")`，不留死项。
+3. **用户配置迁移**：若新目录没有配置而 `...\XAF\NetSpeedMon\settings.json` 存在，则复制过来（只在目标不存在时复制，不覆盖）。
+4. **代码内部**：命名空间 `nsm` → `nsf`，CMake 变量 `NSM_*` → `NSF_*`，`NETSPEEDMON_VERSION` → `NETSPEEDFLUX_VERSION`。
+
+**故意没改的**：仓库地址仍是 `https://gitee.com/user_gitee/NetSpeedMon`（Gitee 上的仓库名要单独改），
+本地目录 `D:\Demo\demo22\NetSpeedMon` 也未重命名（改名仓库目录会影响已有的构建脚本与本机路径）。
+
+**验证**：exe `FileVersion/ProductVersion = 1.3.0`、`ProductName = NetSpeedFlux`；进程名 `NetSpeedFlux`；
+窗口标题 `NetSpeedFlux 网速监测 - NetSpeedFlux`；设置界面版本标签 `v1.3.0 · Qt 6.8.3`；
+首次启动日志出现自启路径自动更新；`ctest 3/3`、MSVC 零警告。

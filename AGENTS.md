@@ -46,7 +46,7 @@ ctest --test-dir build -C Release --output-on-failure
 cmake --install build --prefix dist --config Release
 ```
 
-交付标准：**编译零错误零警告**（`/W4 /permissive-`）、`ctest` 全绿、`dist/NetSpeedMon.exe` 能启动且悬浮窗可见。
+交付标准：**编译零错误零警告**（`/W4 /permissive-`）、`ctest` 全绿、`dist/NetSpeedFlux.exe` 能启动且悬浮窗可见。
 
 ---
 

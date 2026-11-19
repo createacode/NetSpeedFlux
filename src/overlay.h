@@ -1,4 +1,4 @@
-// NetSpeedMon — 任务栏悬浮窗（透明、置顶、鼠标穿透、事件驱动）
+// NetSpeedFlux — 任务栏悬浮窗（透明、置顶、鼠标穿透、事件驱动）
 #pragma once
 
 #include <QColor>
@@ -14,7 +14,7 @@
 #include "speed_format.h"
 #include "theme.h"
 
-namespace nsm {
+namespace nsf {
 
 class Overlay : public QWidget {
     Q_OBJECT
@@ -36,8 +36,19 @@ public:
     void setUserVisible(bool visible);
     bool userVisible() const { return m_userVisible; }
 
+    // 托盘图标关闭后，悬浮窗是唯一入口：此时挂一个低级鼠标钩子，检测"落在悬浮窗上的双击"。
+    // 注意：窗口本身始终点击穿透，钩子只听不拦 —— 单击完全不受影响（无感）。
+    void setInteractive(bool interactive);
+    bool isInteractive() const { return m_interactive; }
+
+    // 由全局鼠标钩子回调（GUI 线程）
+    void onGlobalLeftButtonDown(const QPoint& screenPos);
+
     // 关闭前调用：解除 WinEvent 钩子并隐藏，避免销毁过程中的窗口消息异常。
     void prepareDestroy();
+
+signals:
+    void activationRequested();
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -96,6 +107,9 @@ private:
     QRect m_lastTaskbarRect;
     qreal m_lastDpr = 0.0;
     bool m_userVisible = true;
+    bool m_interactive = false;
+    qint64 m_lastClickMs = 0;
+    QPoint m_lastClickPos;
     bool m_fullscreenHidden = false;
     bool m_started = false;
     bool m_shownOnce = false;
@@ -105,4 +119,4 @@ private:
     void* m_winEventHook = nullptr;
 };
 
-}  // namespace nsm
+}  // namespace nsf

@@ -1,4 +1,4 @@
-# NetSpeedMon
+# NetSpeedFlux
 
 > Real-time network speed overlay for the Windows taskbar · Qt6 / C++17 / Win32
 
@@ -6,7 +6,7 @@ A small, transparent overlay sits on top of the taskbar and shows live upload (�
 download (↓ blue) throughput. Clicks pass through to the taskbar; the overlay never takes focus
 and never appears in Alt+Tab.
 
-Current version: **1.1.0**
+Current version: **1.3.0**
 
 ---
 
@@ -124,7 +124,7 @@ configuration and logs stay next to it.
 | Mode | Config | Logs |
 |------|--------|------|
 | Portable (writable executable dir) | `<exe>/config/settings.json` | `<exe>/logs/YYYY-MM-DD.log` |
-| Per-user (Program Files and other read-only locations) | `%LOCALAPPDATA%/XAF/NetSpeedMon/settings.json` | `%LOCALAPPDATA%/XAF/NetSpeedMon/logs/` |
+| Per-user (Program Files and other read-only locations) | `%LOCALAPPDATA%/XAF/NetSpeedFlux/settings.json` | `%LOCALAPPDATA%/XAF/NetSpeedFlux/logs/` |
 
 When moving from a portable copy to an installed one, the old configuration is copied into the user
 directory on first start (existing files are never overwritten).

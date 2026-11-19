@@ -10,7 +10,7 @@
 
 #include <cstdio>
 
-namespace nsm {
+namespace nsf {
 namespace {
 
 QMutex g_mutex;
@@ -24,7 +24,7 @@ constexpr int kKeepDays = 30;
 void reportOnce(const QString& message) {
     if (g_reportedFailure) return;
     g_reportedFailure = true;
-    std::fprintf(stderr, "[NetSpeedMon] %s\n", qPrintable(message));
+    std::fprintf(stderr, "[NetSpeedFlux] %s\n", qPrintable(message));
 }
 
 }  // namespace
@@ -58,14 +58,14 @@ void Log::write(const QString& level, const QString& message) {
     QMutexLocker locker(&g_mutex);
 
     if (g_directory.isEmpty()) {
-        std::fprintf(stderr, "[NetSpeedMon] %s\n", qPrintable(message));
+        std::fprintf(stderr, "[NetSpeedFlux] %s\n", qPrintable(message));
         return;
     }
 
     QDir dir(g_directory);
     if (!dir.exists() && !dir.mkpath(QStringLiteral("."))) {
         reportOnce(QStringLiteral("无法创建日志目录：%1").arg(g_directory));
-        std::fprintf(stderr, "[NetSpeedMon] %s\n", qPrintable(message));
+        std::fprintf(stderr, "[NetSpeedFlux] %s\n", qPrintable(message));
         return;
     }
 
@@ -81,7 +81,7 @@ void Log::write(const QString& level, const QString& message) {
     QFile file(path);
     if (!file.open(QIODevice::Append | QIODevice::Text)) {
         reportOnce(QStringLiteral("无法写入日志文件：%1").arg(path));
-        std::fprintf(stderr, "[NetSpeedMon] %s\n", qPrintable(message));
+        std::fprintf(stderr, "[NetSpeedFlux] %s\n", qPrintable(message));
         return;
     }
 
@@ -103,4 +103,4 @@ void Log::error(const QString& message) {
     write(QStringLiteral("E"), message);
 }
 
-}  // namespace nsm
+}  // namespace nsf

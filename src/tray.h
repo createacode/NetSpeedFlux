@@ -1,4 +1,4 @@
-// NetSpeedMon — 系统托盘（图标对象只创建一次，只替换图标内容）
+// NetSpeedFlux — 系统托盘（图标对象只创建一次，只替换图标内容）
 #pragma once
 
 #include <QObject>
@@ -9,7 +9,7 @@ class QMenu;
 class QSystemTrayIcon;
 class QAction;
 
-namespace nsm {
+namespace nsf {
 
 class Tray : public QObject {
     Q_OBJECT
@@ -37,4 +37,4 @@ private:
     bool m_available = false;
 };
 
-}  // namespace nsm
+}  // namespace nsf

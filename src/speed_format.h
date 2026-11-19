@@ -1,10 +1,10 @@
-// NetSpeedMon — 速度格式化（纯逻辑，可单测）
+// NetSpeedFlux — 速度格式化（纯逻辑，可单测）
 #pragma once
 
 #include <QString>
 #include <QStringList>
 
-namespace nsm {
+namespace nsf {
 
 // 单位模式。配置文件里沿用历史字符串 "auto"/"KB"/"MB"/"short"。
 enum class UnitMode {
@@ -32,4 +32,4 @@ QStringList numberWidthSamples(UnitMode mode);
 // 布局用：所有可能的单位标签。
 QStringList allUnitLabels();
 
-}  // namespace nsm
+}  // namespace nsf

@@ -1,4 +1,4 @@
-// NetSpeedMon — Win32 辅助：任务栏几何、全屏检测、颜色采样、开机自启
+// NetSpeedFlux — Win32 辅助：任务栏几何、全屏检测、颜色采样、开机自启
 #pragma once
 
 #include <QColor>
@@ -7,7 +7,7 @@
 
 #include "theme.h"
 
-namespace nsm::win {
+namespace nsf::win {
 
 // 任务栏顶层窗口（Shell_TrayWnd）。找不到时返回 nullptr。
 void* taskbarWindow();
@@ -30,4 +30,4 @@ QString autoStartCommand();
 bool isAutoStartEnabled();
 bool setAutoStart(bool enable, QString* error = nullptr);
 
-}  // namespace nsm::win
+}  // namespace nsf::win

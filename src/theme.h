@@ -1,11 +1,11 @@
-// NetSpeedMon — 主题色板与对比度工具
+// NetSpeedFlux — 主题色板与对比度工具
 #pragma once
 
 #include <QColor>
 #include <QString>
 #include <QStringList>
 
-namespace nsm {
+namespace nsf {
 
 // 任务栏明暗。未知时不做任何颜色修正，保持主题原色。
 enum class TaskbarBrightness {
@@ -48,4 +48,4 @@ OverlayColors overlayColors(const QString& themeName, const QString& customColor
 QColor overlayBorderColor(const QString& themeName, const QString& customColor,
                           TaskbarBrightness brightness);
 
-}  // namespace nsm
+}  // namespace nsf

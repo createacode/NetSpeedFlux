@@ -13,7 +13,7 @@
 
 #include <utility>
 
-namespace nsm {
+namespace nsf {
 namespace {
 
 constexpr int kConfigVersion = 2;
@@ -198,4 +198,4 @@ bool ConfigStore::save(const Config& config, QString* error) const {
     return true;
 }
 
-}  // namespace nsm
+}  // namespace nsf

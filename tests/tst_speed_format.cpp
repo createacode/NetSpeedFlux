@@ -2,7 +2,7 @@
 
 #include "speed_format.h"
 
-using namespace nsm;
+using namespace nsf;
 
 class TstSpeedFormat : public QObject {
     Q_OBJECT

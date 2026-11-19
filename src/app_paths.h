@@ -1,9 +1,9 @@
-// NetSpeedMon — 运行期路径策略（便携优先，不可写时回退到用户目录）
+// NetSpeedFlux — 运行期路径策略（便携优先，不可写时回退到用户目录）
 #pragma once
 
 #include <QString>
 
-namespace nsm {
+namespace nsf {
 
 class AppPaths {
 public:
@@ -29,4 +29,4 @@ private:
     QString m_warning;
 };
 
-}  // namespace nsm
+}  // namespace nsf

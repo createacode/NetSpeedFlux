@@ -1,4 +1,4 @@
-// NetSpeedMon — 配置结构与持久化
+// NetSpeedFlux — 配置结构与持久化
 #pragma once
 
 #include <QRect>
@@ -6,7 +6,7 @@
 
 #include "speed_format.h"
 
-namespace nsm {
+namespace nsf {
 
 enum class OverlayAnchor {
     Left,
@@ -73,4 +73,4 @@ private:
     QString m_path;
 };
 
-}  // namespace nsm
+}  // namespace nsf

@@ -1,4 +1,4 @@
-// NetSpeedMon — 应用主控
+// NetSpeedFlux — 应用主控
 #pragma once
 
 #include <QObject>
@@ -8,7 +8,7 @@
 
 #include "config.h"
 
-namespace nsm {
+namespace nsf {
 
 class ConfigStore;
 class NetMonitor;
@@ -54,4 +54,4 @@ private:
     bool m_quitting = false;
 };
 
-}  // namespace nsm
+}  // namespace nsf

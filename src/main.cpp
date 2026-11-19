@@ -1,4 +1,4 @@
-// NetSpeedMon — 程序入口
+// NetSpeedFlux — 程序入口
 #include <QApplication>
 #include <QIcon>
 #include <QString>
@@ -16,22 +16,22 @@ int main(int argc, char* argv[]) {
 
     QApplication application(argc, argv);
     QApplication::setOrganizationName(QStringLiteral("XAF"));
-    QApplication::setApplicationName(QStringLiteral("NetSpeedMon"));
-    QApplication::setApplicationVersion(QStringLiteral(NETSPEEDMON_VERSION));
-    QApplication::setApplicationDisplayName(QStringLiteral("NetSpeedMon"));
+    QApplication::setApplicationName(QStringLiteral("NetSpeedFlux"));
+    QApplication::setApplicationVersion(QStringLiteral(NETSPEEDFLUX_VERSION));
+    QApplication::setApplicationDisplayName(QStringLiteral("NetSpeedFlux"));
     QApplication::setWindowIcon(QIcon(QStringLiteral(":/app.ico")));
     // 托盘常驻程序：最后一个窗口隐藏不等于退出。
     QApplication::setQuitOnLastWindowClosed(false);
 
     // 单实例判断要在创建任何窗口之前完成。
-    nsm::SingleInstance singleInstance;
+    nsf::SingleInstance singleInstance;
     if (!singleInstance.tryAcquire()) {
         singleInstance.notifyExisting();
         return 0;
     }
 
-    nsm::AppPaths::instance().init(QCoreApplication::applicationDirPath());
-    nsm::Log::init(nsm::AppPaths::instance().logDir());
+    nsf::AppPaths::instance().init(QCoreApplication::applicationDirPath());
+    nsf::Log::init(nsf::AppPaths::instance().logDir());
 
     bool startMinimized = false;
     for (int index = 1; index < argc; ++index) {
@@ -41,9 +41,9 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    nsm::App app;
-    QObject::connect(&singleInstance, &nsm::SingleInstance::activationRequested, &app,
-                     &nsm::App::activate);
+    nsf::App app;
+    QObject::connect(&singleInstance, &nsf::SingleInstance::activationRequested, &app,
+                     &nsf::App::activate);
     app.init();
 
     if (startMinimized) {

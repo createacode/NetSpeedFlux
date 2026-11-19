@@ -22,7 +22,7 @@
 #include "tray.h"
 #include "win_util.h"
 
-namespace nsm {
+namespace nsf {
 namespace {
 
 bool isGeometryOnSomeScreen(const QRect& rect) {
@@ -78,7 +78,7 @@ void App::init() {
     m_cfg = result.config;
 
     if (!paths.warning().isEmpty()) Log::warning(paths.warning());
-    Log::info(QStringLiteral("NetSpeedMon %1 启动（配置：%2，模式：%3）")
+    Log::info(QStringLiteral("NetSpeedFlux %1 启动（配置：%2，模式：%3）")
                   .arg(QCoreApplication::applicationVersion(), paths.configFile(),
                        paths.portable() ? QStringLiteral("便携") : QStringLiteral("用户目录")));
 
@@ -95,6 +95,8 @@ void App::init() {
     connect(m_window, &SettingsWindow::quitRequested, this, &App::quit);
     connect(m_tray, &Tray::openRequested, this, &App::activate);
     connect(m_tray, &Tray::quitRequested, this, &App::quit);
+    // 托盘关闭时，双击悬浮窗 = 打开设置界面
+    connect(m_overlay, &Overlay::activationRequested, this, &App::activate);
 
     if (result.fileMissing) {
         // 首次运行就把默认配置落盘，让用户能直接找到并编辑。
@@ -102,9 +104,14 @@ void App::init() {
         if (!m_store->save(m_cfg, &error)) Log::warning(error);
     }
 
-    // 配置里的自启状态与注册表不一致时只提示，不擅自修改系统设置。
+    // 配置要求自启但注册表项缺失/指向旧路径（例如程序被改名或移动）时自动修复。
     if (m_cfg.autoStart && !win::isAutoStartEnabled()) {
-        Log::warning(QStringLiteral("配置要求开机自启，但注册表启动项缺失或指向了旧路径"));
+        QString autoStartError;
+        if (win::setAutoStart(true, &autoStartError)) {
+            Log::info(QStringLiteral("开机自启指向旧路径，已按当前程序位置自动更新"));
+        } else {
+            Log::warning(QStringLiteral("开机自启修复失败：%1").arg(autoStartError));
+        }
     }
 
     applyConfig();
@@ -138,6 +145,8 @@ void App::applyConfig() {
     if (m_overlay) {
         m_overlay->applyConfig();
         m_overlay->setUserVisible(m_cfg.showOverlay);
+        // 没有托盘图标时，悬浮窗是唯一入口：允许双击打开设置
+        m_overlay->setInteractive(!m_cfg.showTray);
     }
 }
 
@@ -231,7 +240,7 @@ void App::quit() {
     if (m_quitting) return;
     m_quitting = true;
 
-    Log::info(QStringLiteral("NetSpeedMon 退出"));
+    Log::info(QStringLiteral("NetSpeedFlux 退出"));
     saveConfig();
 
     // 先摘掉悬浮窗（含 WinEvent 钩子），再退出事件循环。
@@ -246,4 +255,4 @@ void App::quit() {
     QCoreApplication::quit();
 }
 
-}  // namespace nsm
+}  // namespace nsf

@@ -14,7 +14,7 @@
 
 #include "logger.h"
 
-namespace nsm {
+namespace nsf {
 namespace {
 
 bool isInterestingInterface(const MIB_IF_ROW2& row) {
@@ -102,4 +102,4 @@ void NetMonitor::poll() {
     emit updated(m_up, m_down);
 }
 
-}  // namespace nsm
+}  // namespace nsf

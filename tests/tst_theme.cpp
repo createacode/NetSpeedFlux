@@ -5,7 +5,7 @@
 #include "config.h"
 #include "theme.h"
 
-using namespace nsm;
+using namespace nsf;
 
 class TstTheme : public QObject {
     Q_OBJECT

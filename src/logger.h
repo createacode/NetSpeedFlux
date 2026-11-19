@@ -1,9 +1,9 @@
-// NetSpeedMon — 按天分割的文件日志
+// NetSpeedFlux — 按天分割的文件日志
 #pragma once
 
 #include <QString>
 
-namespace nsm {
+namespace nsf {
 
 class Log {
 public:
@@ -20,4 +20,4 @@ private:
     static void prune(const QString& directory);
 };
 
-}  // namespace nsm
+}  // namespace nsf

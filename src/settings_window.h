@@ -1,4 +1,4 @@
-// NetSpeedMon — 设置主窗口
+// NetSpeedFlux — 设置主窗口
 #pragma once
 
 #include <QWidget>
@@ -13,7 +13,7 @@ class QLabel;
 class QPushButton;
 class QSpinBox;
 
-namespace nsm {
+namespace nsf {
 
 class SettingsWindow : public QWidget {
     Q_OBJECT
@@ -72,4 +72,4 @@ private:
     QLabel* m_status = nullptr;
 };
 
-}  // namespace nsm
+}  // namespace nsf

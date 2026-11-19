@@ -1,4 +1,4 @@
-// NetSpeedMon — 网速采样（GetIfTable2，64 位计数器 + 按接口差分 + 真实耗时归一化）
+// NetSpeedFlux — 网速采样（GetIfTable2，64 位计数器 + 按接口差分 + 真实耗时归一化）
 #pragma once
 
 #include <QElapsedTimer>
@@ -6,7 +6,7 @@
 #include <QObject>
 #include <QTimer>
 
-namespace nsm {
+namespace nsf {
 
 class NetMonitor : public QObject {
     Q_OBJECT
@@ -41,4 +41,4 @@ private:
     int m_consecutiveErrors = 0;
 };
 
-}  // namespace nsm
+}  // namespace nsf

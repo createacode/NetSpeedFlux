@@ -1,11 +1,11 @@
-// NetSpeedMon — 单实例（命名互斥 + 广播消息唤醒已有实例）
+// NetSpeedFlux — 单实例（命名互斥 + 广播消息唤醒已有实例）
 #pragma once
 
 #include <QAbstractNativeEventFilter>
 #include <QByteArray>
 #include <QObject>
 
-namespace nsm {
+namespace nsf {
 
 class SingleInstance : public QObject, public QAbstractNativeEventFilter {
     Q_OBJECT
@@ -30,4 +30,4 @@ private:
     unsigned int m_messageId = 0;
 };
 
-}  // namespace nsm
+}  // namespace nsf

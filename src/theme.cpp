@@ -2,7 +2,7 @@
 
 #include <QtMath>
 
-namespace nsm {
+namespace nsf {
 namespace {
 
 const QColor kUpColor(0xFF, 0x70, 0x43);    // #FF7043
@@ -169,4 +169,4 @@ QColor overlayBorderColor(const QString& themeName, const QString& customColor,
     return QColor(qBound(0, r, 255), qBound(0, g, 255), qBound(0, b, 255), 204);
 }
 
-}  // namespace nsm
+}  // namespace nsf

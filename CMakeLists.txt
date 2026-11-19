@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(NetSpeedMon VERSION 1.1.0 LANGUAGES CXX)
+project(NetSpeedFlux VERSION 1.3.0 LANGUAGES CXX)
 
 if(NOT WIN32)
-    message(FATAL_ERROR "NetSpeedMon 仅支持 Windows（依赖 iphlpapi / pdh / shell32 等 Win32 API）。")
+    message(FATAL_ERROR "NetSpeedFlux 仅支持 Windows（依赖 iphlpapi / pdh / shell32 等 Win32 API）。")
 endif()
 
 # .rc 资源（图标 + 版本信息）需要 RC 语言；MinGW 下由 windres 处理。
@@ -58,14 +58,14 @@ set(NSM_HEADERS
     src/win_util.h
 )
 
-qt_add_executable(NetSpeedMon WIN32 ${NSM_SOURCES} ${NSM_HEADERS})
+qt_add_executable(NetSpeedFlux WIN32 ${NSM_SOURCES} ${NSM_HEADERS})
 
-target_include_directories(NetSpeedMon PRIVATE
+target_include_directories(NetSpeedFlux PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_BINARY_DIR}/generated
 )
 
-target_link_libraries(NetSpeedMon PRIVATE
+target_link_libraries(NetSpeedFlux PRIVATE
     Qt6::Widgets
     iphlpapi   # GetIfTable2 / FreeMibTable
     advapi32   # RegGetValueW / RegSetValueExW
@@ -78,7 +78,7 @@ target_link_libraries(NetSpeedMon PRIVATE
 if(MINGW)
     # 静态链接 MinGW 运行库，减少外部 DLL 依赖。
     # 不用 -static：那会把 Qt 也静态化，与共享 Qt 冲突。
-    target_link_options(NetSpeedMon PRIVATE -static-libgcc -static-libstdc++)
+    target_link_options(NetSpeedFlux PRIVATE -static-libgcc -static-libstdc++)
 endif()
 
 # ---- 版本号单一来源：生成 version.h 与 app.rc ----
@@ -94,21 +94,21 @@ configure_file(
     ${CMAKE_CURRENT_BINARY_DIR}/generated/app.rc
     @ONLY
 )
-target_sources(NetSpeedMon PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated/app.rc)
+target_sources(NetSpeedFlux PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated/app.rc)
 
 # 图标同时嵌入 Qt 资源，运行期不再依赖 exe 同级目录下的 app.ico。
-qt_add_resources(NetSpeedMon "nsm_icons"
+qt_add_resources(NetSpeedFlux "nsm_icons"
     PREFIX "/"
     BASE "${CMAKE_CURRENT_SOURCE_DIR}"
     FILES "${CMAKE_CURRENT_SOURCE_DIR}/app.ico"
 )
 
 # ---- 安装与部署 ----
-install(TARGETS NetSpeedMon RUNTIME DESTINATION .)
+install(TARGETS NetSpeedFlux RUNTIME DESTINATION .)
 
 if(COMMAND qt_generate_deploy_app_script)
     qt_generate_deploy_app_script(
-        TARGET NetSpeedMon
+        TARGET NetSpeedFlux
         OUTPUT_SCRIPT NSM_DEPLOY_SCRIPT
         NO_UNSUPPORTED_PLATFORM_ERROR
     )

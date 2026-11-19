@@ -6,8 +6,10 @@
 
 #include "overlay.h"
 
+#include <QDateTime>
 #include <QEvent>
 #include <QFontMetrics>
+#include <QMouseEvent>
 #include <QLinearGradient>
 #include <QPainterPath>
 #include <QGuiApplication>
@@ -22,11 +24,23 @@
 #define DWMWA_CLOAK 13
 #endif
 
-namespace nsm {
+namespace nsf {
 namespace {
 
 Overlay* g_overlay = nullptr;
 UINT g_taskbarCreatedMessage = 0;
+HHOOK g_mouseHook = nullptr;
+
+// 低级鼠标钩子：只听不拦，永远 CallNextHookEx，所以单击照旧穿透到任务栏。
+LRESULT CALLBACK globalMouseHook(int code, WPARAM wParam, LPARAM lParam) {
+    if (code == HC_ACTION && wParam == WM_LBUTTONDOWN && g_overlay != nullptr) {
+        const auto* info = reinterpret_cast<const MSLLHOOKSTRUCT*>(lParam);
+        if (info != nullptr) {
+            g_overlay->onGlobalLeftButtonDown(QPoint(info->pt.x, info->pt.y));
+        }
+    }
+    return CallNextHookEx(g_mouseHook, code, wParam, lParam);
+}
 
 void CALLBACK foregroundChanged(HWINEVENTHOOK, DWORD, HWND, LONG, LONG, DWORD, DWORD) {
     if (g_overlay) QMetaObject::invokeMethod(g_overlay, "reevaluate", Qt::QueuedConnection);
@@ -48,7 +62,7 @@ Overlay::Overlay(const Config& config) : QWidget(nullptr), m_cfg(&config) {
     setAttribute(Qt::WA_ShowWithoutActivating, true);
     setAttribute(Qt::WA_TransparentForMouseEvents, true);
     setFocusPolicy(Qt::NoFocus);
-    setWindowTitle(QStringLiteral("NetSpeedMon Overlay"));
+    setWindowTitle(QStringLiteral("NetSpeedFlux Overlay"));
 
     g_overlay = this;
     g_taskbarCreatedMessage = RegisterWindowMessageW(L"TaskbarCreated");
@@ -78,6 +92,10 @@ Overlay::Overlay(const Config& config) : QWidget(nullptr), m_cfg(&config) {
 }
 
 Overlay::~Overlay() {
+    if (g_mouseHook != nullptr) {
+        UnhookWindowsHookEx(g_mouseHook);
+        g_mouseHook = nullptr;
+    }
     removeHooks();
     m_timer.stop();
     if (g_overlay == this) g_overlay = nullptr;
@@ -353,6 +371,63 @@ void Overlay::ensureTopMost() {
     keepOnTop();
 }
 
+void Overlay::setInteractive(bool interactive) {
+    if (m_interactive == interactive) return;
+    m_interactive = interactive;
+    m_lastClickMs = 0;
+
+    // 窗口本身永远保持点击穿透（否则单击会被吃掉）。托盘关闭时额外挂一个全局鼠标钩子，
+    // 只观察"落在悬浮窗矩形内的连击"，不拦截任何事件 —— 单击完全无感。
+    if (interactive) {
+        if (g_mouseHook == nullptr) {
+            g_mouseHook = SetWindowsHookExW(WH_MOUSE_LL, globalMouseHook,
+                                            GetModuleHandleW(nullptr), 0);
+            if (g_mouseHook == nullptr) {
+                Log::warning(QStringLiteral("无法安装鼠标钩子，双击悬浮窗打开设置将不可用"));
+            }
+        }
+        Log::info(QStringLiteral("托盘已关闭：双击悬浮窗可打开设置（单击仍然穿透）"));
+    } else {
+        if (g_mouseHook != nullptr) {
+            UnhookWindowsHookEx(g_mouseHook);
+            g_mouseHook = nullptr;
+        }
+        Log::info(QStringLiteral("托盘可用：悬浮窗保持点击穿透，双击无动作"));
+    }
+}
+
+void Overlay::onGlobalLeftButtonDown(const QPoint& screenPos) {
+    if (!m_interactive || !m_userVisible || m_fullscreenHidden) return;
+
+    HWND hwnd = reinterpret_cast<HWND>(winId());
+    if (!hwnd || !IsWindow(hwnd) || !IsWindowVisible(hwnd)) return;
+
+    RECT windowRect = {};
+    if (!GetWindowRect(hwnd, &windowRect)) return;
+    const QRect rect(windowRect.left, windowRect.top, windowRect.right - windowRect.left,
+                     windowRect.bottom - windowRect.top);
+    if (!rect.contains(screenPos)) {
+        m_lastClickMs = 0;
+        return;
+    }
+
+    // 用系统设置的双击时间/距离判断，和资源管理器行为一致
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const int tolerance = qMax(8, GetSystemMetrics(SM_CXDOUBLECLK));
+    const bool isDoubleClick = m_lastClickMs != 0 && (now - m_lastClickMs) <= GetDoubleClickTime() &&
+                               (screenPos - m_lastClickPos).manhattanLength() <= tolerance;
+
+    if (isDoubleClick) {
+        m_lastClickMs = 0;
+        // 排队执行，避免在钩子回调里直接弹窗口
+        QMetaObject::invokeMethod(this, [this]() { emit activationRequested(); },
+                                  Qt::QueuedConnection);
+        return;
+    }
+    m_lastClickMs = now;
+    m_lastClickPos = screenPos;
+}
+
 void Overlay::setUserVisible(bool visible) {
     m_userVisible = visible;
     if (!visible) m_fullscreenHidden = false;
@@ -422,6 +497,7 @@ void Overlay::paintFrame(QPainter& painter) const {
     QColor border = overlayBorderColor(m_cfg->theme, m_cfg->customColor, m_brightness);
 
     painter.save();
+
     painter.setBrush(Qt::NoBrush);
 
     // 极淡的外发光：两圈逐级变淡，让框"浮"起来一点
@@ -548,7 +624,8 @@ bool Overlay::nativeEvent(const QByteArray& eventType, void* message, qintptr* r
         m_nativeHandle = reinterpret_cast<void*>(msg->hwnd);
     }
 
-    // 鼠标穿透：让点击落到任务栏上。这是唯一需要干预的原生消息。
+    // 鼠标穿透：让点击落到任务栏上。窗口始终穿透（单击无感），
+    // 托盘关闭时的"双击打开设置"由低级鼠标钩子另行识别，不依赖窗口收事件。
     if (msg->message == WM_NCHITTEST) {
         if (result) *result = HTTRANSPARENT;
         return true;
@@ -566,4 +643,4 @@ bool Overlay::nativeEvent(const QByteArray& eventType, void* message, qintptr* r
     return QWidget::nativeEvent(eventType, message, result);
 }
 
-}  // namespace nsm
+}  // namespace nsf

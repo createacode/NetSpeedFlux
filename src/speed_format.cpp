@@ -2,7 +2,7 @@
 
 #include <QStringList>
 
-namespace nsm {
+namespace nsf {
 namespace {
 
 constexpr double kKilo = 1024.0;
@@ -115,4 +115,4 @@ QStringList allUnitLabels() {
             QStringLiteral(" K/s"), QStringLiteral(" M/s")};
 }
 
-}  // namespace nsm
+}  // namespace nsf

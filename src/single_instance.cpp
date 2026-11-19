@@ -9,11 +9,11 @@
 
 #include "logger.h"
 
-namespace nsm {
+namespace nsf {
 namespace {
 
-constexpr wchar_t kMutexName[] = L"NetSpeedMon_SingleInstance_v2";
-constexpr wchar_t kActivateMessageName[] = L"NetSpeedMon_Activate_v2";
+constexpr wchar_t kMutexName[] = L"NetSpeedFlux_SingleInstance_v2";
+constexpr wchar_t kActivateMessageName[] = L"NetSpeedFlux_Activate_v2";
 
 }  // namespace
 
@@ -71,4 +71,4 @@ bool SingleInstance::nativeEventFilter(const QByteArray& eventType, void* messag
     return false;
 }
 
-}  // namespace nsm
+}  // namespace nsf

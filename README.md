@@ -1,11 +1,11 @@
-# NetSpeedMon
+# NetSpeedFlux
 
 > Windows 任务栏实时网速悬浮窗 · Qt6 / C++17 / Win32
 
 在任务栏上叠加一个小巧的透明悬浮窗，实时显示上传（↑ 橙）与下载（↓ 蓝）速度。
 鼠标点击穿透到任务栏，不抢焦点、不进 Alt+Tab。
 
-当前版本：**v1.1.0**
+当前版本：**v1.3.0**
 
 ---
 
@@ -16,6 +16,9 @@
 - **自动对比度**：内置主题在浅色/深色任务栏上自动修正文字亮度，保证可读
 - **全屏自动隐藏**：检测到全屏应用/演示模式时隐藏悬浮窗
 - **系统托盘**：左键打开主界面，右键菜单可打开/退出，悬停显示实时速度
+- **关闭行为**：关闭主窗口只是收进后台，程序继续跑；关掉托盘图标后仍如此（悬浮窗就是唯一入口）
+- **托盘关闭后双击悬浮窗打开设置**：悬浮窗始终点击穿透（单击完全不影响任务栏）；
+  没有托盘图标时用一个"只听不拦"的低级鼠标钩子识别双击，托盘可用时该钩子不安装
 - **字体自定义**：字体、字号、加粗、斜体、自定颜色
 - **配置持久化**：JSON 配置，窗口位置记忆（含多屏校验）
 - **开机自启**：写 `HKCU\Run`，带 `--min` 静默启动
@@ -122,7 +125,7 @@ cmake --install build --prefix dist --config Release
 | 模式 | 配置 | 日志 |
 |------|------|------|
 | 便携（exe 目录可写） | `<exe>/config/settings.json` | `<exe>/logs/YYYY-MM-DD.log` |
-| 用户目录（Program Files 等只读位置） | `%LOCALAPPDATA%/XAF/NetSpeedMon/settings.json` | `%LOCALAPPDATA%/XAF/NetSpeedMon/logs/` |
+| 用户目录（Program Files 等只读位置） | `%LOCALAPPDATA%/XAF/NetSpeedFlux/settings.json` | `%LOCALAPPDATA%/XAF/NetSpeedFlux/logs/` |
 
 从便携版换到安装版时，首次启动会把旧配置复制到用户目录（不覆盖已有文件）。
 设置在「系统 → 打开配置目录」里可直接跳转。

@@ -12,7 +12,7 @@
 
 #include "logger.h"
 
-namespace nsm {
+namespace nsf {
 namespace {
 
 QIcon iconFromResource() {
@@ -105,4 +105,4 @@ void Tray::setSpeeds(quint64 up, quint64 down, UnitMode unit) {
                                 formatSpeed(static_cast<double>(down), unit)));
 }
 
-}  // namespace nsm
+}  // namespace nsf

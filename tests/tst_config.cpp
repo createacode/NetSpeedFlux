@@ -7,7 +7,7 @@
 
 #include "config.h"
 
-using namespace nsm;
+using namespace nsf;
 
 class TstConfig : public QObject {
     Q_OBJECT

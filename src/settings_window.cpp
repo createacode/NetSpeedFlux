@@ -27,7 +27,7 @@
 #include "speed_format.h"
 #include "theme.h"
 
-namespace nsm {
+namespace nsf {
 namespace {
 
 const char* const kStyleSheet = R"(
@@ -75,7 +75,7 @@ void selectByData(QComboBox* combo, const QString& value) {
 SettingsWindow::SettingsWindow(Config* config, QWidget* parent)
     : QWidget(parent), m_cfg(config), m_working(*config) {
     setObjectName(QStringLiteral("settingsRoot"));
-    setWindowTitle(QStringLiteral("NetSpeedMon 网速监测"));
+    setWindowTitle(QStringLiteral("NetSpeedFlux 网速监测"));
     setMinimumSize(kMinWindowWidth, kMinWindowHeight);
     resize(720, 400);
     setStyleSheet(QString::fromUtf8(kStyleSheet));
@@ -262,8 +262,8 @@ void SettingsWindow::buildUi() {
     btnAbout->setObjectName(QStringLiteral("btnAbout"));
     connect(btnAbout, &QPushButton::clicked, this, [this]() {
         QMessageBox::about(
-            this, QStringLiteral("关于 NetSpeedMon"),
-            QStringLiteral("NetSpeedMon %1\n\n"
+            this, QStringLiteral("关于 NetSpeedFlux"),
+            QStringLiteral("NetSpeedFlux %1\n\n"
                            "任务栏实时网速监测工具\n"
                            "作者：XAF\n"
                            "项目主页：https://gitee.com/user_gitee/NetSpeedMon\n\n"
@@ -337,7 +337,9 @@ void SettingsWindow::saveSettings() {
     m_cfg->clamp();
 
     emit configApplied();
-    setStatus(QStringLiteral("已保存并应用"));
+    setStatus(m_cfg->showTray
+                  ? QStringLiteral("已保存并应用")
+                  : QStringLiteral("已保存：关闭托盘图标后，双击悬浮窗或再次双击程序都能打开此界面"));
 }
 
 void SettingsWindow::restoreDefaults() {
@@ -396,9 +398,12 @@ void SettingsWindow::showEvent(QShowEvent* event) {
 }
 
 void SettingsWindow::closeEvent(QCloseEvent* event) {
-    // 托盘不可用时（或用户关掉了托盘），关闭窗口就是退出，否则程序会变成没有入口的僵尸进程。
+    // 关闭主窗口只是"收起来"，程序继续跑，前提是还有可见入口：
+    //   - 托盘图标可用，或
+    //   - 悬浮窗还开着（用户关掉托盘时，悬浮窗就是他唯一能看到的东西，不能跟着一起退）
+    // 只有两者都没有时才真正退出，避免留下完全看不见的僵尸进程。
     const bool trayUsable = m_cfg->showTray && QSystemTrayIcon::isSystemTrayAvailable();
-    if (trayUsable) {
+    if (trayUsable || m_cfg->showOverlay) {
         hide();
         event->ignore();
         return;
@@ -409,4 +414,4 @@ void SettingsWindow::closeEvent(QCloseEvent* event) {
     QTimer::singleShot(0, this, &SettingsWindow::quitRequested);
 }
 
-}  // namespace nsm
+}  // namespace nsf
