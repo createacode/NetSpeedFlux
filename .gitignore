@@ -1,0 +1,49 @@
+# 构建产物
+/build/
+/cmake-build-*/
+/build-*/
+/out/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+install_manifest.txt
+CTestTestfile.cmake
+*.ninja
+.ninja_deps
+.ninja_log
+compile_commands.json
+*.obj
+*.o
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.dll
+*.exe
+
+# IDE / 编辑器
+.vs/
+.vscode/
+.idea/
+*.user
+*.sln
+*.vcxproj
+*.vcxproj.*
+*.swp
+*~
+
+# 运行期数据（配置、日志、窗口状态）
+/config/
+/logs/
+*.log
+*.bak.json
+
+# 发布产物（用 GitHub Releases，不要进仓库）
+/dist/
+/release/
+/artifacts/
+
+# 系统
+Thumbs.db
+Desktop.ini
+.DS_Store

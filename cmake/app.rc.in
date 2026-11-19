@@ -1,0 +1,38 @@
+// Generated from cmake/app.rc.in by CMake. Do not edit.
+// Version numbers come from project(VERSION).
+// This file is intentionally pure ASCII: rc.exe and windres disagree on code pages.
+
+#define IDI_APPICON 101
+
+IDI_APPICON ICON "@NSM_ICON_PATH@"
+
+1 VERSIONINFO
+FILEVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+PRODUCTVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+FILEFLAGSMASK 0x3fL
+FILEFLAGS 0x0L
+FILEOS 0x40004L
+FILETYPE 0x1L
+FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "080404B0"
+        BEGIN
+            VALUE "CompanyName", "XAF"
+            VALUE "FileDescription", "NetSpeedMon - taskbar network speed monitor"
+            VALUE "FileVersion", "@PROJECT_VERSION@"
+            VALUE "InternalName", "NetSpeedMon"
+            VALUE "LegalCopyright", "Copyright (C) 2026 XAF. All rights reserved."
+            VALUE "LegalTrademarks", "NetSpeedMon"
+            VALUE "OriginalFilename", "NetSpeedMon.exe"
+            VALUE "ProductName", "NetSpeedMon"
+            VALUE "ProductVersion", "@PROJECT_VERSION@"
+            VALUE "Comments", "Author: XAF | Source: https://gitee.com/user_gitee/NetSpeedMon"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x804, 1200
+    END
+END
