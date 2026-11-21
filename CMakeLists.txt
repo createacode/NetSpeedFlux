@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(NetSpeedFlux VERSION 1.3.0 LANGUAGES CXX)
+project(NetSpeedFlux VERSION 1.3.7 LANGUAGES CXX)
 
 if(NOT WIN32)
     message(FATAL_ERROR "NetSpeedFlux 仅支持 Windows（依赖 iphlpapi / pdh / shell32 等 Win32 API）。")

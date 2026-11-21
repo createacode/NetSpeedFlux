@@ -34,14 +34,18 @@ int main(int argc, char* argv[]) {
     nsf::Log::init(nsf::AppPaths::instance().logDir());
 
     bool startMinimized = false;
+    bool netDiag = false;
     for (int index = 1; index < argc; ++index) {
         const QString argument = QString::fromLocal8Bit(argv[index]);
         if (argument == QLatin1String("--min") || argument == QLatin1String("-m")) {
             startMinimized = true;
+        } else if (argument == QLatin1String("--net-diag")) {
+            netDiag = true;
         }
     }
 
     nsf::App app;
+    app.setNetDiagnostics(netDiag);
     QObject::connect(&singleInstance, &nsf::SingleInstance::activationRequested, &app,
                      &nsf::App::activate);
     app.init();

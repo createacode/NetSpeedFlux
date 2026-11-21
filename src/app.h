@@ -24,6 +24,7 @@ public:
     ~App() override;
 
     void init();
+    void setNetDiagnostics(bool on) { m_netDiag = on; }
 
     void showMainWindow();
     void showTrayOnly();
@@ -52,6 +53,7 @@ private:
     Overlay* m_overlay = nullptr;
     QTimer m_overlayWatchdog;
     bool m_quitting = false;
+    bool m_netDiag = false;
 };
 
 }  // namespace nsf

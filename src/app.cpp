@@ -83,6 +83,7 @@ void App::init() {
                        paths.portable() ? QStringLiteral("便携") : QStringLiteral("用户目录")));
 
     m_monitor = new NetMonitor(this);
+    m_monitor->setVerbose(m_netDiag);
     m_window = new SettingsWindow(&m_cfg);
     m_tray = new Tray(this);
     m_overlay = new Overlay(m_cfg);

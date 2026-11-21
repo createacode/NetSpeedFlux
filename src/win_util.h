@@ -2,8 +2,10 @@
 #pragma once
 
 #include <QColor>
+#include <QPair>
 #include <QRect>
 #include <QString>
+#include <QVector>
 
 #include "theme.h"
 
@@ -15,7 +17,12 @@ void* taskbarWindow();
 // 以下矩形均为物理像素；未找到对应窗口时返回空 QRect。
 QRect taskbarRectPhysical();
 QRect trayNotifyRectPhysical();
-QRect startButtonRectPhysical();
+
+// 任务栏上"有内容"的水平区间（物理像素、绝对 x 坐标，横向任务栏）。
+// 用屏幕 DC 逐列扫描得到：比较每列与背景参考行的最大色差，所以连 Win11 里
+// XAML 直接绘制的组件（天气小组件、居中任务栏的图标）也能识别 —— 这些没有独立 HWND，
+// 只靠 FindWindow 是发现不了的。扫描失败时返回空列表。
+QVector<QPair<int, int>> taskbarContentRanges(const QRect& taskbarPhysical);
 
 bool isFullscreenApplicationActive();
 

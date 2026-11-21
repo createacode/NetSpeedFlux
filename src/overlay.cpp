@@ -185,6 +185,58 @@ void Overlay::rebuildLayout() {
     update();
 }
 
+namespace {
+// 布局签名用的量化器：把区间边界对齐到 8px，托盘 hover 高光这类几个像素的变化不算"布局变化"，
+// 避免鼠标扫过托盘时悬浮窗来回挪。
+QVector<QPair<int, int>> quantize(const QVector<QPair<int, int>>& ranges) {
+    QVector<QPair<int, int>> result;
+    result.reserve(ranges.size());
+    for (const auto& range : ranges) {
+        const int from = (range.first / 8) * 8;
+        const int to = ((range.second + 7) / 8) * 8;
+        if (!result.isEmpty() && from <= result.last().second) {
+            result.last().second = qMax(result.last().second, to);
+        } else {
+            result.append({from, to});
+        }
+    }
+    return result;
+}
+
+// 目标位置与当前位置差这么多以内就不动（防抖）
+constexpr int kMoveThresholdPx = 8;
+}  // namespace
+
+QVector<QPair<int, int>> Overlay::taskbarContent() const {
+    QVector<QPair<int, int>> content;
+    const QRect taskbarPhysical = win::taskbarRectPhysical();
+    if (taskbarPhysical.isEmpty()) return content;
+
+    QScreen* screen = QGuiApplication::primaryScreen();
+    const qreal dpr = screen ? screen->devicePixelRatio() : 1.0;
+
+    const QRect self = geometry();
+    const QRect selfPhysical(qRound(self.x() * dpr), qRound(self.y() * dpr),
+                             qRound(self.width() * dpr), qRound(self.height() * dpr));
+    // 只有自己确实落在任务栏里才剔除，否则启动时 pos() 还是 (0,0)，
+    // 会把左上角的组件（如天气小组件）误当成"自己"而漏掉。
+    const bool excludeSelf = selfPhysical.intersects(taskbarPhysical);
+
+    for (const auto& raw : win::taskbarContentRanges(taskbarPhysical)) {
+        if (excludeSelf) {
+            // 只丢弃"基本就是自己"的那一段（自己画的边框/文字），不做切分，
+            // 否则自己一移动，占用集合就被切开，居中锚点会来回跳。
+            // 只要与自身相交就整段丢弃：自己画出来的边框/文字绝不能变成障碍物，
+            // 否则每个 tick 都会把自己往旁边挤（这是之前左右乱挪的根源）。
+            const int overlap = qMin(raw.second, selfPhysical.right()) -
+                                qMax(raw.first, selfPhysical.left());
+            if (overlap > 0) continue;
+        }
+        content.append({qRound(raw.first / dpr), qRound(raw.second / dpr)});
+    }
+    return content;
+}
+
 void Overlay::reanchor() {
     const QRect taskbarPhysical = win::taskbarRectPhysical();
     if (taskbarPhysical.isEmpty()) return;
@@ -198,6 +250,27 @@ void Overlay::reanchor() {
     const QRect taskbar = toLogical(taskbarPhysical, dpr);
     if (taskbar.isEmpty()) return;
 
+    // 托盘区会随图标增减、箭头状态左右移动，这里记录下来供 1Hz 检查比对
+    const QRect notifyPhysical = win::trayNotifyRectPhysical();
+    m_lastNotifyRect = notifyPhysical;
+
+    // 开机瞬间任务栏可能还没画完：扫描不到任何组件时先不定位置，交给 1Hz 重试，
+    // 否则会按"空任务栏"把自己摆到一个莫名其妙的地方，直到用户点任务栏才恢复。
+    // 托盘区还没建好时绝不定位：此时"右边全是空白"会把悬浮窗摆到时钟上，
+    // 之后扫描又会把我们自己的像素当成"自己"剔掉，位置就锁死了再也回不来。
+    if (notifyPhysical.isEmpty()) {
+        m_lastContentSignature.clear();
+        Log::info(QStringLiteral("托盘区尚未就绪，稍后重新定位"));
+        return;
+    }
+    const QVector<QPair<int, int>> content = taskbarContent();
+    if (content.isEmpty()) {
+        m_lastContentSignature.clear();
+        Log::info(QStringLiteral("任务栏尚未就绪，稍后重新定位"));
+        return;
+    }
+    m_lastContentSignature = quantize(content);
+
     const QSize overlaySize = size();
     int x = taskbar.left();
     int y = taskbar.top();
@@ -205,36 +278,113 @@ void Overlay::reanchor() {
 
     if (vertical) {
         x = taskbar.left() + (taskbar.width() - overlaySize.width()) / 2;
-        const QRect notify = toLogical(win::trayNotifyRectPhysical(), dpr);
+        const QRect notify = toLogical(notifyPhysical, dpr);
         y = notify.isEmpty() ? taskbar.top() + m_gap
                              : notify.top() - overlaySize.height() - m_gap;
     } else {
+        // 放置规则（确定性优先，像素扫描只做"避让护栏"）：
+        //   右侧 = 托盘区左边界 - 宽度 - 间距（永远贴着托盘，不依赖扫描结果）
+        //   左侧 = 任务栏最左 + 间距，撞到组件就往右让
+        //   居中 = 屏幕中心，撞到组件就向两边找最近的空位
+        // 这样开机时序、鼠标 hover、图标增减都不会改变"默认位置"的判定依据。
+        const QRect notify = toLogical(notifyPhysical, dpr);
+        // 判定"撞到组件"时把组件区间左右各扩 m_gap，保证最终至少留出间距而不是只"不重叠"
+        const int margin = m_gap;
+        auto blocked = [&content, margin](int from, int to) -> const QPair<int, int>* {
+            for (const auto& range : content) {
+                if (from < range.second + margin && to > range.first - margin) return &range;
+            }
+            return nullptr;
+        };
+
         switch (m_cfg->anchor) {
+        case OverlayAnchor::Right: {
+            // 右侧锚点不做任何像素级避让：托盘区左边界是系统给的确定值，
+            // 用 notify.left - 宽度 - 间距 得到的落点永远紧贴托盘。
+            // 之前在这里加"撞到组件就左移"，结果开机时任务栏还没画完、扫描报出的假组件
+            // 会把悬浮窗推到 x≈1346（实测），而托盘本身没变，看起来就是"位置一直不对"。
+            x = notify.isEmpty() ? taskbar.right() - overlaySize.width() * 3 / 2
+                                 : notify.left() - overlaySize.width() - m_gap - 4;
+            break;
+        }
         case OverlayAnchor::Left: {
-            const QRect start = toLogical(win::startButtonRectPhysical(), dpr);
-            x = start.isEmpty() ? taskbar.left() + m_gap : start.right() + 2 + m_gap;
+            int target = taskbar.left() + m_gap;
+            for (int guard = 0; guard < 32; ++guard) {
+                const QPair<int, int>* blocker = blocked(target, target + overlaySize.width());
+                if (blocker == nullptr) break;
+                target = blocker->second + m_gap;
+                if (target + overlaySize.width() > taskbar.right()) break;
+            }
+            x = target;
             break;
         }
         case OverlayAnchor::Center:
-            x = taskbar.left() + (taskbar.width() - overlaySize.width()) / 2;
-            break;
-        case OverlayAnchor::Right:
         default: {
-            const QRect notify = toLogical(win::trayNotifyRectPhysical(), dpr);
-            x = notify.isEmpty() ? taskbar.right() - overlaySize.width() - 150
-                                 : notify.left() - overlaySize.width() - m_gap - 4;
+            const int center = taskbar.left() + (taskbar.width() - overlaySize.width()) / 2;
+            int target = center;
+            const int limit = qMax(taskbar.width(), overlaySize.width());
+            for (int offset = 0; offset <= limit; offset += 4) {
+                // 先试中心左侧偏移，再试右侧偏移，取先找到的
+                const int candidates[2] = {center - offset, center + offset};
+                bool found = false;
+                for (const int candidate : candidates) {
+                    if (candidate < taskbar.left() ||
+                        candidate + overlaySize.width() > taskbar.right() + 1) {
+                        continue;
+                    }
+                    if (blocked(candidate, candidate + overlaySize.width()) == nullptr) {
+                        target = candidate;
+                        found = true;
+                        break;
+                    }
+                }
+                if (found) break;
+            }
+            x = target;
             break;
         }
         }
         y = taskbar.top() + (taskbar.height() - overlaySize.height()) / 2;
     }
-
-    const int maxX = taskbar.left() + qMax(0, taskbar.width() - overlaySize.width());
+    int maxX = taskbar.left() + qMax(0, taskbar.width() - overlaySize.width());
+    // 硬约束：右对齐时绝不越过托盘区左边界，托盘变窄时也不会压到"隐藏图标"箭头上
+    if (m_cfg->anchor == OverlayAnchor::Right && !notifyPhysical.isEmpty()) {
+        const QRect notify = toLogical(notifyPhysical, dpr);
+        if (!notify.isEmpty()) {
+            maxX = qMin(maxX, notify.left() - overlaySize.width() - 6);
+        }
+    }
     const int maxY = taskbar.top() + qMax(0, taskbar.height() - overlaySize.height());
-    x = qBound(taskbar.left(), x, maxX);
+    x = qBound(taskbar.left(), x, qMax(taskbar.left(), maxX));
     y = qBound(taskbar.top(), y, maxY);
 
+    // 防抖：位置变化小于阈值就不动，鼠标扫过托盘、图标高光变化都不会让它抖
+    if (m_lastPos.x() >= 0 && qAbs(x - m_lastPos.x()) <= kMoveThresholdPx &&
+        qAbs(y - m_lastPos.y()) <= kMoveThresholdPx) {
+        m_lastTaskbarRect = taskbarPhysical;
+        return;
+    }
+
     if (QPoint(x, y) != m_lastPos) {
+        // 把判定依据写进日志：日后位置不对，一眼能看出是托盘区没就绪还是组件避让导致
+        Log::info(QStringLiteral("定位依据：taskbar=%1,%2 %3x%4 notify=%5,%6 %7x%8 组件=%9段 -> x=%10")
+                      .arg(taskbar.left())
+                      .arg(taskbar.top())
+                      .arg(taskbar.width())
+                      .arg(taskbar.height())
+                      .arg(notifyPhysical.left())
+                      .arg(notifyPhysical.top())
+                      .arg(notifyPhysical.width())
+                      .arg(notifyPhysical.height())
+                      .arg(content.size())
+                      .arg(x));
+        if (m_lastPos.x() >= 0) {  // 首次定位不打印 (-1,-1)
+            Log::info(QStringLiteral("悬浮窗定位：%1,%2 -> %3,%4")
+                          .arg(m_lastPos.x())
+                          .arg(m_lastPos.y())
+                          .arg(x)
+                          .arg(y));
+        }
         m_lastPos = QPoint(x, y);
         move(x, y);
     }
@@ -269,6 +419,16 @@ void Overlay::showPrimed() {
     m_nativeHandle = reinterpret_cast<void*>(winId());
     attachToTaskbarOwner();  // 结构性保活：owner = 任务栏
 
+    // 开机时首次定位往往发生在 shell 还没稳定的时候（托盘区宽度、图标都还没定型）。
+    // 3 秒后再强制重算一次，不受"布局签名未变"的限制；位置差 <阈值 时仍然不动。
+    if (!m_settleScheduled) {
+        m_settleScheduled = true;
+        QTimer::singleShot(3000, this, [this]() {
+            m_lastContentSignature.clear();
+            reanchor();
+        });
+    }
+
     if (cloaked) {
         cloak = FALSE;
         DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, &cloak, sizeof(cloak));
@@ -296,6 +456,12 @@ void Overlay::applyVisibility() {
 void Overlay::ensureShown() {
     HWND hwnd = reinterpret_cast<HWND>(winId());
     if (!hwnd) return;
+
+    // 开机自启时任务栏可能还没创建：这时候上屏会在左上角闪一下，宁可先不显示，
+    // 等 1Hz 的 reevaluate 发现任务栏后再走正常显示流程。
+    if (!m_shownOnce && win::taskbarRectPhysical().isEmpty()) {
+        return;
+    }
 
     if (!m_shownOnce) {
         m_shownOnce = true;
@@ -485,7 +651,27 @@ void Overlay::reevaluate() {
         rebuildLayout();  // DPI 变了要重算字体度量与窗口尺寸
         return;
     }
-    if (taskbarPhysical != m_lastTaskbarRect) reanchor();
+    // 任务栏或托盘区任一变化都重新定位：否则图标增减后会出现"有时贴着箭头、有时离很远"
+    const QRect notifyPhysical = win::trayNotifyRectPhysical();
+    if (notifyPhysical != m_lastNotifyRect) {
+        Log::info(QStringLiteral("托盘区几何变化（%1x%2 @%3 -> %4x%5 @%6），重新定位悬浮窗")
+                      .arg(m_lastNotifyRect.width())
+                      .arg(m_lastNotifyRect.height())
+                      .arg(m_lastNotifyRect.left())
+                      .arg(notifyPhysical.width())
+                      .arg(notifyPhysical.height())
+                      .arg(notifyPhysical.left()));
+        reanchor();
+    } else if (taskbarPhysical != m_lastTaskbarRect) {
+        reanchor();
+    } else if (m_lastContentSignature.isEmpty()) {
+        // 开机时任务栏还没画完（扫描不到组件）：每秒重试，直到能正常定位
+        reanchor();
+    } else {
+        // 组件布局变了（图标增减、天气小组件加载完成、开机后任务栏才画完）也要重新定位，
+        // 否则开机时按"半成品任务栏"算出的位置会一直保持，直到用户点一下任务栏才恢复。
+        if (quantize(taskbarContent()) != m_lastContentSignature) reanchor();
+    }
 }
 
 void Overlay::paintFrame(QPainter& painter) const {

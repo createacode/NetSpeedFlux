@@ -6,7 +6,7 @@ A small, transparent overlay sits on top of the taskbar and shows live upload (â
 download (â†“ blue) throughput. Clicks pass through to the taskbar; the overlay never takes focus
 and never appears in Alt+Tab.
 
-Current version: **1.3.0**
+Current version: **1.3.7**
 
 ---
 

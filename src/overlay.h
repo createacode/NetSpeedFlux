@@ -4,10 +4,12 @@
 #include <QColor>
 #include <QFont>
 #include <QMetaObject>
+#include <QPair>
 #include <QPainter>
 #include <QPoint>
 #include <QRect>
 #include <QTimer>
+#include <QVector>
 #include <QWidget>
 
 #include "config.h"
@@ -74,6 +76,9 @@ private:
     void keepOnTop();
     void rebuildLayout();
     void reanchor();
+    // 任务栏上被组件占用的区间（逻辑坐标）。按像素扫描得到，并剔除自己当前占据的那段，
+    // 这样自身移动不会改变这个集合（否则会把自己当障碍物来回漂移）。
+    QVector<QPair<int, int>> taskbarContent() const;
     void applyVisibility();
     void refreshTaskbarBrightness();
     void drawColumn(QPainter& painter, int index, bool up, const SpeedParts& parts,
@@ -105,6 +110,10 @@ private:
     int m_boxPadY = 5;
     QPoint m_lastPos{-1, -1};
     QRect m_lastTaskbarRect;
+    QRect m_lastNotifyRect;   // 托盘区矩形（图标增减/箭头状态变化时会变）
+    QVector<QPair<int, int>> m_lastContentSignature;  // 上次定位时看到的组件布局
+    qint64 m_lastNotReadyLogMs = 0;                   // "尚未就绪"日志节流
+    bool m_settleScheduled = false;                    // 首次上屏后的"沉降"重算是否已安排
     qreal m_lastDpr = 0.0;
     bool m_userVisible = true;
     bool m_interactive = false;

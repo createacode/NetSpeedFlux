@@ -65,7 +65,7 @@ void Tray::createIcon() {
         m_menu = new QMenu();
         m_actOpen = m_menu->addAction(QStringLiteral("打开主界面"));
         m_menu->addSeparator();
-        m_actQuit = m_menu->addAction(QStringLiteral("退出"));
+        m_actQuit = m_menu->addAction(QStringLiteral("退出进程"));
 
         connect(m_actOpen, &QAction::triggered, this, &Tray::openRequested);
         connect(m_actQuit, &QAction::triggered, this, &Tray::quitRequested);

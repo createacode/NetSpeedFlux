@@ -273,7 +273,7 @@ void SettingsWindow::buildUi() {
                      AppPaths::instance().configFile()));
     });
 
-    auto* btnQuit = new QPushButton(QStringLiteral("退出"), this);
+    auto* btnQuit = new QPushButton(QStringLiteral("退出进程"), this);
     btnQuit->setObjectName(QStringLiteral("btnQuit"));
     connect(btnQuit, &QPushButton::clicked, this, &SettingsWindow::quitRequested);
 

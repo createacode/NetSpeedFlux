@@ -24,6 +24,15 @@ bool isInterestingInterface(const MIB_IF_ROW2& row) {
     return true;
 }
 
+// GetIfTable2 会把每张网卡上挂的 NDIS 轻量筛选器（WFP / QoS Packet Scheduler）也列成
+// 独立"接口"，而且它们的字节计数和物理网卡完全一样 —— 按接口求和会把这些流量算 3~4 遍
+// （实测：一个 94MB/s 的下载被读成 4×94）。
+// 因此优先只统计 HardwareInterface 为真的物理网卡；只有在找不到任何硬件接口时
+// （极少数纯虚拟环境）才退回"全部可用接口"的旧逻辑。
+bool isHardwareInterface(const MIB_IF_ROW2& row) {
+    return row.InterfaceAndOperStatusFlags.HardwareInterface != FALSE;
+}
+
 }  // namespace
 
 NetMonitor::NetMonitor(QObject* parent) : QObject(parent) {
@@ -61,14 +70,27 @@ void NetMonitor::poll() {
 
     m_consecutiveErrors = 0;
 
+    // 先判断是否存在物理网卡；有就只统计物理网卡，避免把筛选器接口重复计入
+    bool hasHardwareInterface = false;
+    for (ULONG index = 0; index < table->NumEntries; ++index) {
+        const MIB_IF_ROW2& row = table->Table[index];
+        if (isInterestingInterface(row) && isHardwareInterface(row)) {
+            hasHardwareInterface = true;
+            break;
+        }
+    }
+
     quint64 bytesIn = 0;
     quint64 bytesOut = 0;
     QHash<quint64, Counters> current;
     current.reserve(static_cast<int>(table->NumEntries));
+    QStringList verboseParts;
 
     for (ULONG index = 0; index < table->NumEntries; ++index) {
         const MIB_IF_ROW2& row = table->Table[index];
         if (!isInterestingInterface(row)) continue;
+        // 有物理网卡时忽略虚拟/筛选器接口（它们的计数与物理网卡重复）
+        if (hasHardwareInterface && !isHardwareInterface(row)) continue;
 
         const quint64 key = row.InterfaceLuid.Value;
         const Counters now{row.InOctets, row.OutOctets};
@@ -76,8 +98,17 @@ void NetMonitor::poll() {
         const auto previous = m_previous.constFind(key);
         if (previous != m_previous.constEnd() && !m_firstSample) {
             // 计数器回退说明接口被重置，这一帧按 0 处理，避免报出巨大峰值。
-            if (now.in >= previous->in) bytesIn += now.in - previous->in;
-            if (now.out >= previous->out) bytesOut += now.out - previous->out;
+            const quint64 deltaIn = now.in >= previous->in ? now.in - previous->in : 0;
+            const quint64 deltaOut = now.out >= previous->out ? now.out - previous->out : 0;
+            bytesIn += deltaIn;
+            bytesOut += deltaOut;
+            if (m_verbose) {
+                verboseParts << QStringLiteral("%1[type=%2] in=%3KB out=%4KB")
+                                    .arg(QString::fromWCharArray(row.Alias))
+                                    .arg(row.Type)
+                                    .arg(deltaIn / 1024)
+                                    .arg(deltaOut / 1024);
+            }
         }
         current.insert(key, now);
     }
@@ -97,6 +128,14 @@ void NetMonitor::poll() {
         const double seconds = static_cast<double>(elapsedMs) / 1000.0;
         m_down = static_cast<quint64>(static_cast<double>(bytesIn) / seconds);
         m_up = static_cast<quint64>(static_cast<double>(bytesOut) / seconds);
+    }
+
+    if (m_verbose) {
+        Log::info(QStringLiteral("net-diag elapsed=%1ms  sumIn=%2KB/s  sumOut=%3KB/s  |  %4")
+                      .arg(elapsedMs)
+                      .arg(bytesIn / 1024)
+                      .arg(bytesOut / 1024)
+                      .arg(verboseParts.join(QStringLiteral(", "))));
     }
 
     emit updated(m_up, m_down);

@@ -8,10 +8,10 @@
 #include "win_util.h"
 
 #include <QCoreApplication>
+#include <QDir>
 #include <QVector>
 
 #include <algorithm>
-#include <QDir>
 
 namespace nsf::win {
 namespace {
@@ -57,6 +57,7 @@ void* findTrayChild(const wchar_t* className) {
     return FindWindowExW(static_cast<HWND>(taskbar), nullptr, className, nullptr);
 }
 
+
 }  // namespace
 
 void* taskbarWindow() {
@@ -72,19 +73,83 @@ QRect trayNotifyRectPhysical() {
     if (!notify) notify = FindWindowW(L"TrayNotifyWnd", nullptr);
     if (!notify) return QRect();
 
-    // 优先用通知区里的工具栏（时钟/托盘图标）作为锚点，Fallback 到通知区本身。
+    // 用通知区容器本身的左边界作锚点：它在"显示隐藏图标"箭头（chevron）的左侧，
+    // 悬浮窗贴上去不会压住箭头。Win10 上的 ToolbarWindow32 只覆盖可见图标区、
+    // 不含箭头，用它当锚点会导致悬浮窗压到箭头上，所以只作兜底。
+    const QRect rect = windowRectPhysical(notify);
+    if (!rect.isEmpty()) return rect;
     if (void* toolbar = FindWindowExW(static_cast<HWND>(notify), nullptr, L"ToolbarWindow32", nullptr)) {
-        const QRect rect = windowRectPhysical(toolbar);
-        if (!rect.isEmpty()) return rect;
+        return windowRectPhysical(toolbar);
     }
-    return windowRectPhysical(notify);
+    return QRect();
 }
 
-QRect startButtonRectPhysical() {
-    // Win10/11 任务栏下的开始按钮；找不到就算了。
-    if (void* start = findTrayChild(L"Start")) return windowRectPhysical(start);
-    return windowRectPhysical(FindWindowW(L"Start", nullptr));
+QVector<QPair<int, int>> taskbarContentRanges(const QRect& taskbar) {
+    QVector<QPair<int, int>> ranges;
+    const int width = taskbar.width();
+    const int height = taskbar.height();
+    if (width <= 0 || height <= 4) return ranges;
+
+    HDC screen = GetDC(nullptr);
+    if (!screen) return ranges;
+    HDC memory = CreateCompatibleDC(screen);
+
+    BITMAPINFO info = {};
+    info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    info.bmiHeader.biWidth = width;
+    info.bmiHeader.biHeight = -height;  // 负数 = 自上而下，行序与屏幕一致
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+
+    void* bits = nullptr;
+    HBITMAP bitmap = CreateDIBSection(screen, &info, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (bitmap != nullptr && bits != nullptr) {
+        const HGDIOBJ previous = SelectObject(memory, bitmap);
+        if (BitBlt(memory, 0, 0, width, height, screen, taskbar.left(), taskbar.top(), SRCCOPY)) {
+            const auto* pixels = static_cast<const quint32*>(bits);
+            // 参考行取第 3 行：避开任务栏顶部的高光/描边
+            const int referenceRow = 3;
+            bool occupied = false;
+            int start = 0;
+            for (int column = 0; column < width; ++column) {
+                const QRgb background = pixels[referenceRow * width + column];
+                int difference = 0;
+                for (int row = 4; row < height; ++row) {
+                    const QRgb sample = pixels[row * width + column];
+                    difference = qMax(difference, qAbs(qRed(sample) - qRed(background)) +
+                                                     qAbs(qGreen(sample) - qGreen(background)) +
+                                                     qAbs(qBlue(sample) - qBlue(background)));
+                }
+                const bool here = difference > 40;  // 任务栏背景是平滑渐变，40 足够区分图标/文字
+                if (here && !occupied) {
+                    occupied = true;
+                    start = column;
+                } else if (!here && occupied) {
+                    occupied = false;
+                    if (column - start >= 3) ranges.append({start + taskbar.left(), column + taskbar.left()});
+                }
+            }
+            if (occupied) ranges.append({start + taskbar.left(), width + taskbar.left()});
+        }
+        SelectObject(memory, previous);
+        DeleteObject(bitmap);
+    }
+    DeleteDC(memory);
+    ReleaseDC(nullptr, screen);
+
+    // 合并相邻区间之间的小空隙（图标间距约 8px，不该被当成可用空位）
+    QVector<QPair<int, int>> merged;
+    for (const auto& range : ranges) {
+        if (!merged.isEmpty() && range.first - merged.last().second <= 8) {
+            merged.last().second = range.second;
+        } else {
+            merged.append(range);
+        }
+    }
+    return merged;
 }
+
 
 bool isFullscreenApplicationActive() {
     QUERY_USER_NOTIFICATION_STATE state = QUNS_NOT_PRESENT;

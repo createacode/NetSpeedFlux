@@ -19,6 +19,10 @@ dist/        本地部署产物（已 gitignore）
 关键设计（改动前务必理解，避免把已修好的问题改回去）：
 
 - **网速只有一个数据源**：`GetIfTable2`，按 `InterfaceLuid` 逐接口差分，速率 = 增量 ÷ `QElapsedTimer` 实测耗时。不要再引入 PDH 或第二份基线。
+- **必须按 `HardwareInterface` 去重**：`GetIfTable2` 会把每张网卡上的 NDIS 筛选器
+  （WFP Native MAC / WFP 802.3 MAC / QoS Packet Scheduler）也各列成一个接口，字节计数与物理网卡完全相同，
+  全部累加会让网速虚高 3~5 倍（v1.3.1 修的就是这个）。虚拟/隧道接口（Wintun 等，type=53）也要排除。
+  排查时用 `--net-diag` 打印每张网卡的增量。
 - **悬浮窗"永不被任务栏盖住"靠的是 owner 机制**：`attachToTaskbarOwner()` 把 `Shell_TrayWnd` 设为
   `GWLP_HWNDPARENT`（MS 文档：owned window 永远在 owner 之上）。窗口仍是顶层窗口，Qt 的透明渲染不受影响。
   `keepOnTop()`（200ms）只做三件事：恢复被隐藏/最小化、补挂 owner、topmost 位丢失时兜底。
